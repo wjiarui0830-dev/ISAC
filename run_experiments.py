@@ -51,6 +51,7 @@ for u in range(U):
         tau[u][k] = (d0 / max(d_uk, d0)) ** 2
 
 EPS_R_FIXED = 50.0  # 距离 CRB 阈值固定，扫描角度 CRB
+N_RESTARTS  = 3    # 每个 eps_alpha 的随机重启次数，取最优 R（防止局部最优）
 
 # AO 超参数
 AO_PARAMS = dict(
@@ -90,17 +91,22 @@ EPS_ALPHA_SWEEP = np.logspace(-5, 1, 14)
 #  辅助函数
 # ══════════════════════════════════════════════════════════════
 def run_silent(params):
-    """静默运行 algo11_ao，返回 (R_star, CRB_alpha) 或 (None, None)"""
-    buf = io.StringIO()
-    try:
-        with redirect_stdout(buf):
-            res = algo11_ao(**params)
-        R_v, C_v = res['R_star'], res['CRB_alpha']
-        if np.isfinite(R_v) and np.isfinite(C_v) and R_v > 0:
-            return float(R_v), float(C_v)
-    except Exception:
-        pass
-    return None, None
+    """多次随机重启 algo11_ao，返回最优 (R_star, CRB_alpha) 或 (None, None)。
+    多重启动消除 PSO 局部最优导致的 R 陷阱（即感知过好但通信被毁的坏解）。"""
+    best_R, best_C = None, None
+    for trial in range(N_RESTARTS):
+        np.random.seed(trial * 17 + 5)   # 每次用不同但可重复的种子
+        buf = io.StringIO()
+        try:
+            with redirect_stdout(buf):
+                res = algo11_ao(**params)
+            R_v, C_v = res['R_star'], res['CRB_alpha']
+            if np.isfinite(R_v) and np.isfinite(C_v) and R_v > 0:
+                if best_R is None or R_v > best_R:
+                    best_R, best_C = float(R_v), float(C_v)
+        except Exception:
+            pass
+    return best_R, best_C
 
 
 def sweep(base_params, label):
