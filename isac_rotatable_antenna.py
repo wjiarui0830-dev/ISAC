@@ -473,14 +473,17 @@ def algo7_beam_opt(Rs_list_t, phi_t, mu, eta, h_list, sigma2_k,
 
         # ── C1: CRB(alpha) <= eps_alpha
         #    等价 SOC: ||[2*zeta_ar, zeta_rr-zeta_aa+eps_a]|| <= zeta_rr+zeta_aa-eps_a
+        #    对应: zeta_aa*zeta_rr - zeta_ar^2 >= eps_a_tilde * zeta_rr
         constraints += [
             cp.norm(cp.hstack([2 * zeta_ar, zeta_rr - zeta_aa + eps_a])) <=
             zeta_rr + zeta_aa - eps_a
         ]
         # ── C2: CRB(r) <= eps_r
+        #    等价 SOC: ||[2*zeta_ar, zeta_aa-zeta_rr+eps_r]|| <= zeta_aa+zeta_rr-eps_r
+        #    对应: zeta_aa*zeta_rr - zeta_ar^2 >= eps_r_tilde * zeta_aa
         constraints += [
-            cp.norm(cp.hstack([2 * zeta_ar, zeta_rr - zeta_aa + eps_r])) <=
-            zeta_rr + zeta_aa - eps_r
+            cp.norm(cp.hstack([2 * zeta_ar, zeta_aa - zeta_rr + eps_r])) <=
+            zeta_aa + zeta_rr - eps_r
         ]
         # ── C3-C5: SCA 仿射下界约束 ──
         constraints += [zeta_aa <= S_aa_tilde]
@@ -711,13 +714,15 @@ def algo8_sensing_cov_opt(w_ik_list, Rs_list_t, phi_t, mu, eta, h_list, sigma2_k
     # ── D1/D2: CRB SOC 约束 ──
     eps_a = float(eps_alpha_tilde)
     eps_r = float(eps_r_tilde)
+    # D1: CRB(alpha) <= eps_alpha → Delta >= eps_a_tilde * zeta_rr
     constraints += [
         cp.norm(cp.hstack([2 * zeta_ar, zeta_rr - zeta_aa + eps_a])) <=
         zeta_rr + zeta_aa - eps_a
     ]
+    # D2: CRB(r) <= eps_r → Delta >= eps_r_tilde * zeta_aa
     constraints += [
-        cp.norm(cp.hstack([2 * zeta_ar, zeta_rr - zeta_aa + eps_r])) <=
-        zeta_rr + zeta_aa - eps_r
+        cp.norm(cp.hstack([2 * zeta_ar, zeta_aa - zeta_rr + eps_r])) <=
+        zeta_aa + zeta_rr - eps_r
     ]
     # ── D3-D5: SCA 仿射下界 ──
     constraints += [zeta_aa <= S_aa_lin, zeta_rr <= S_rr_lin]
@@ -1330,7 +1335,8 @@ if __name__ == '__main__':
         for k in range(K):
             d_uk = np.sqrt((bs_pos[u,0]-user_pos[k,0])**2 +
                            (bs_pos[u,1]-user_pos[k,1])**2)
-            tau[u][k] = (d0 / max(d_uk, 1.0)) ** 2
+            # 使用 max(d_uk, d0) 确保 tau <= 1（路径增益不超过参考距离处）
+            tau[u][k] = (d0 / max(d_uk, d0)) ** 2
     print(f"路径损耗矩阵 tau =\n{tau.round(4)}")
 
     # 信道反射系数 βᵤ（三基站）

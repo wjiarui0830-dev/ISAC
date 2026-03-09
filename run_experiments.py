@@ -47,7 +47,8 @@ for u in range(U):
     for k in range(K):
         d_uk = np.sqrt((bs_pos[u, 0] - user_pos[k, 0]) ** 2 +
                        (bs_pos[u, 1] - user_pos[k, 1]) ** 2)
-        tau[u][k] = (d0 / max(d_uk, 1.0)) ** 2
+        # 使用 max(d_uk, d0) 确保 tau <= 1（路径增益不超过参考距离处）
+        tau[u][k] = (d0 / max(d_uk, d0)) ** 2
 
 EPS_R_FIXED = 50.0  # 距离 CRB 阈值固定，扫描角度 CRB
 
@@ -64,7 +65,7 @@ BASE = dict(
     alpha_true=alpha_true, r_true=r_true,
     M=M, N=N, U=U, K=K,
     phi_min=phi_min, phi_max=phi_max_v,
-    lambda_alpha=5.0, lambda_r=5.0,
+    lambda_alpha=10.0, lambda_r=10.0,
     **AO_PARAMS
 )
 
@@ -80,7 +81,9 @@ COLORS  = ['#1f77b4', '#d62728', '#2ca02c', '#ff7f0e']
 MARKERS = ['o', 's', '^', 'D']
 
 # 扫描的 eps_alpha 序列（14个对数均匀点）
-EPS_ALPHA_SWEEP = np.logspace(-7, 0.5, 14)
+# 下限 1e-5 rad² 对应紧约束（高精度感知），上限 10 rad² 对应松约束（低精度感知）
+# 原 1e-7 对该系统几乎不可达（导致大量跳过），调整为合理范围
+EPS_ALPHA_SWEEP = np.logspace(-5, 1, 14)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -165,7 +168,7 @@ BASE_U1 = dict(
     alpha_true=alpha_true, r_true=r_true,
     M=M, N=N, U=1, K=K,
     phi_min=phi_min, phi_max=phi_max_v,
-    lambda_alpha=5.0, lambda_r=5.0,
+    lambda_alpha=10.0, lambda_r=10.0,
     **AO_PARAMS
 )
 R_u1, C_u1 = sweep(BASE_U1, "Single-BS")
