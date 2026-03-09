@@ -90,39 +90,30 @@ EPS_ALPHA_SWEEP = np.logspace(-5, 1, 14)
 #  辅助函数
 # ══════════════════════════════════════════════════════════════
 def run_silent(params):
-    """静默运行 algo11_ao，返回 (R_star, CRB_alpha, result) 或 (None, None, None)"""
+    """静默运行 algo11_ao，返回 (R_star, CRB_alpha) 或 (None, None)"""
     buf = io.StringIO()
     try:
         with redirect_stdout(buf):
             res = algo11_ao(**params)
         R_v, C_v = res['R_star'], res['CRB_alpha']
         if np.isfinite(R_v) and np.isfinite(C_v) and R_v > 0:
-            return float(R_v), float(C_v), res
+            return float(R_v), float(C_v)
     except Exception:
         pass
-    return None, None, None
+    return None, None
 
 
 def sweep(base_params, label):
-    """从松到紧扫描 eps_alpha（热启动），返回 (R_list, CRB_list)"""
+    """扫描 eps_alpha（从紧到松，每次独立冷启动），返回 (R_list, CRB_list)"""
     Rs, Cs = [], []
-    # 从大（松约束）到小（紧约束）扫描，使热启动更稳定
-    sweep_order = EPS_ALPHA_SWEEP[::-1]
-    n = len(sweep_order)
-    prev_result = None
-    for i, eps_a in enumerate(sweep_order):
+    n = len(EPS_ALPHA_SWEEP)
+    for i, eps_a in enumerate(EPS_ALPHA_SWEEP):
         t0 = time.time()
         p = {**base_params, 'eps_alpha': float(eps_a), 'eps_r': EPS_R_FIXED}
-        # 热启动：将上一个成功点的解作为初始值
-        if prev_result is not None:
-            p['w_init']   = prev_result['w_ik_list']
-            p['Rs_init']  = prev_result['Rs_list']
-            p['phi_init'] = prev_result['phi']
-        R_v, C_v, res = run_silent(p)
+        R_v, C_v = run_silent(p)
         elapsed = time.time() - t0
         if R_v is not None:
             Rs.append(R_v); Cs.append(C_v)
-            prev_result = res
             print(f"  [{label}] {i+1}/{n}  eps={eps_a:.1e}  "
                   f"R={R_v:.3f}  CRB={C_v:.2e}  ({elapsed:.0f}s)")
         else:
@@ -137,7 +128,7 @@ def sorted_plot(ax, Cs, Rs, color, marker, linestyle, label):
     idx = np.argsort(Cs)
     Cs_sorted = np.array(Cs)[idx]
     Rs_sorted = np.array(Rs)[idx]
-    # 帕累托包络：若松约束下算法陷入差的局部最优，则用紧约束的更好结果替代
+    # 帕累托包络：若松约束点陷入差的局部最优，用紧约束处更好结果替代
     Rs_pareto = np.maximum.accumulate(Rs_sorted)
     ax.plot(Cs_sorted, Rs_pareto,
             color=color, marker=marker, linestyle=linestyle, label=label)
