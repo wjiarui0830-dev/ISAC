@@ -1039,7 +1039,8 @@ def algo11_ao(bs_pos, user_pos, tau, P_max, beta, sigma2, sigma2_k,
               lambda_alpha=10.0, lambda_r=10.0,
               T_max=50, delta_AO=1e-3, eps_abs=1e-4, eps_AO=1e-5,
               rho_init=0.1, method='PSO',
-              pso_params=None, es_params=None):
+              pso_params=None, es_params=None,
+              w_init=None, Rs_init=None, phi_init=None):
     """
     主 AO 优化框架
 
@@ -1062,28 +1063,36 @@ def algo11_ao(bs_pos, user_pos, tau, P_max, beta, sigma2, sigma2_k,
     """
 
     # ═══ 初始化 ═══
-    phi = np.ones(U) * (phi_min + phi_max) / 2.0
+    if phi_init is not None:
+        phi = np.array(phi_init, dtype=float).copy()
+    else:
+        phi = np.ones(U) * (phi_min + phi_max) / 2.0
 
     # ── 初始用户信道（用于 MRT 初始化）──
     h_list_init0 = build_user_channels(bs_pos, user_pos, phi, tau, M, U, K)
 
-    # 初始通信波束：MRT，预留 rho_sense=30% 的功率给感知
-    rho_sense = 0.3   # 感知功率预留比例
-    w_ik_list = []
-    for i in range(U):
-        for k in range(K):
-            hik = h_list_init0[k][i * M:(i + 1) * M]
-            hik_norm = norm(hik)
-            if hik_norm < 1e-12:
-                hik = np.ones(M, dtype=complex) / np.sqrt(M)
-            else:
-                hik = hik / hik_norm
-            w_ik = np.sqrt((1.0 - rho_sense) * P_max[i] / K) * hik
-            w_ik_list.append(w_ik)
+    if w_init is not None and Rs_init is not None:
+        # 热启动：直接使用外部传入的解
+        w_ik_list = [w.copy() for w in w_init]
+        Rs_list   = [R.copy() for R in Rs_init]
+    else:
+        # 冷启动：MRT 初始化，预留 rho_sense=30% 的功率给感知
+        rho_sense = 0.3
+        w_ik_list = []
+        for i in range(U):
+            for k in range(K):
+                hik = h_list_init0[k][i * M:(i + 1) * M]
+                hik_norm = norm(hik)
+                if hik_norm < 1e-12:
+                    hik = np.ones(M, dtype=complex) / np.sqrt(M)
+                else:
+                    hik = hik / hik_norm
+                w_ik = np.sqrt((1.0 - rho_sense) * P_max[i] / K) * hik
+                w_ik_list.append(w_ik)
 
-    # 初始感知协方差：rho_sense * P_max / M * I
-    Rs_list = [(rho_sense * P_max[i] / M) * np.eye(M, dtype=complex)
-               for i in range(U)]
+        # 初始感知协方差：rho_sense * P_max / M * I
+        Rs_list = [(rho_sense * P_max[i] / M) * np.eye(M, dtype=complex)
+                   for i in range(U)]
 
     # ═══ 可行性检验 ═══
     Rx_init = []
